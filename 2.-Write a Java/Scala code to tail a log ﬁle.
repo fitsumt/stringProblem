@@ -1,0 +1,114 @@
+import java.io.*;
+import java.util.Iterator;
+import java.nio.CharBuffer;
+import java.util.NoSuchElementException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+
+public class TailLogFile {
+    
+    public class MMapIterator implements Iterator<String> {
+        private int timeset;
+        
+        public boolean hasNext() {
+            return timeset < cb.limit();
+        }
+        
+        public MMapIterator(int timeset) {
+            this.timeset = timeset;
+        }
+
+        public String next() {
+            ByteArrayOutputStream sb = new ByteArrayOutputStream();
+            if (timeset >= cb.limit())
+                throw new NoSuchElementException();
+            for (; timeset < cb.limit(); timeset++) {
+                byte c = (cb.get(timeset));
+                if (c == '\n') {
+                    timeset++;
+                    break;
+                }
+                if (c != '\r') {
+                    sb.write(c);
+                }
+                
+            }
+            try {
+                return sb.toString("UTF-8");
+            } catch (UnsupportedEncodingException e) {}
+            return sb.toString();
+        }
+        
+        
+    }
+    
+    
+    private ByteBuffer cb;
+    long size;
+    private long numOfLines = -1;
+    public TailLogFile(String file) throws FileNotFoundException, IOException {
+        FileChannel fc = new FileInputStream(new File(file)).getChannel();
+        size = fc.size();
+        cb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size());
+    }
+    
+    public long getnumOfLines() {
+        if (numOfLines != -1) return numOfLines;
+        long count = 0;
+        for (int i=0; i <size; i++) {
+            if (cb.get(i) == '\n')
+                count++;
+        }
+        numOfLines = count;
+        return count;
+    }
+    
+    public Iterator<String> tail(long lines) {
+        long count=0;
+        long i=0;
+        for (i=size-1; i>=0; i--) {
+            if (cb.get((int)i) == '\n') {
+                count++;
+                if (count == lines+1)
+                    break;
+            }
+        }
+        return new MMapIterator((int)i+1);
+    }
+    
+    public Iterator<String> head() {
+        return new MMapIterator(0);
+    }
+    
+    static public void main(String[] args) {
+        try {
+            Iterator<String> it = new TailLogFile("/sample.txt").head();
+            while (it.hasNext()) {
+                System.out.println(it.next());
+            }
+        } catch (Exception e) {
+            
+        }
+        
+        System.out.println();
+        
+        try {
+            Iterator<String> it = new TailLogFile("/sample.txt").tail(2);
+            while (it.hasNext()) {
+                System.out.println(it.next());
+            }
+        } catch (Exception e) {
+            
+        }
+        
+        System.out.println();
+        
+        try {
+            System.out.println("lines: "+new TailLogFile("/sample.txt").getnumOfLines());
+        } catch (Exception e) {
+            
+        }
+        
+    }
+    
+}
